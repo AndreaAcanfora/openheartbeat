@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - name: Test
+        if: runner.os == 'Linux'
+        run: go test -race ./...
+      - name: Test
+        if: runner.os != 'Linux'
+        run: go test ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Reference server passes the suite end to end
+        run: |
+          go build -o dist/ohp ./cmd/ohp
+          ./dist/ohp serve -addr 127.0.0.1:8080 -key ci0123456789abcdef0123456789abcd -check job:1h:5m &
+          sleep 1
+          ./dist/ohp conform http://127.0.0.1:8080/ping/ci0123456789abcdef0123456789abcd/job
+          ./dist/ohp run -url http://127.0.0.1:8080/ping/ci0123456789abcdef0123456789abcd/job -- sh -c 'echo hello'
