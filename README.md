@@ -1,5 +1,8 @@
 # Open Heartbeat Protocol
 
+[![CI](https://github.com/AndreaAcanfora/openheartbeat/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreaAcanfora/openheartbeat/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/AndreaAcanfora/openheartbeat/ohp.svg)](https://pkg.go.dev/github.com/AndreaAcanfora/openheartbeat/ohp)
+
 An open, vendor-neutral protocol for monitoring cron jobs and scheduled tasks,
 with a reference client, server and conformance suite in Go.
 
@@ -34,7 +37,9 @@ check states and security.
 
 ## The `ohp` command
 
-Install with Go 1.26 or later:
+Download a binary for Linux, macOS, Windows or FreeBSD from the
+[releases](https://github.com/AndreaAcanfora/openheartbeat/releases), or
+install with Go 1.26 or later:
 
 ```sh
 go install github.com/AndreaAcanfora/openheartbeat/cmd/ohp@latest
