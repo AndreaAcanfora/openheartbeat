@@ -1,4 +1,4 @@
-# Open Heartbeat Protocol (OHP) — version 0.1
+# Open Heartbeat Protocol (OHP) — version 0.2
 
 Status: draft. Feedback welcome through GitHub issues.
 
@@ -71,7 +71,9 @@ A signal is selected by the path suffix appended to the check URL:
 | `{check}/log`      | log       | Informational message. Does not change state. |
 | `{check}/{code}`   | exit code | The job exited with status `code`.            |
 
-`{code}` is a decimal integer from `0` to `255` without leading zeros.
+`{code}` is a decimal integer from `0` to `255`. Clients MUST NOT send
+leading zeros. Servers MUST reject values above `255`, SHOULD reject leading
+zeros and MAY instead read them as the decimal value (`01` as `1`).
 Exit code `0` is equivalent to success; any other exit code is equivalent to
 fail. Servers SHOULD store the exit code.
 
@@ -89,11 +91,13 @@ network failure (section 7) are allowed, and servers MUST tolerate them.
 
 ## 5. Query parameters
 
-- `rid` — Run ID. 1 to 64 characters from `A-Z a-z 0-9 - _`. A UUID is
-  RECOMMENDED. When present on a `start` signal and on a completion signal
-  (success, fail or exit code), the server MUST treat them as the same run.
-  This allows overlapping runs of the same check. A server MUST reject an
-  invalid `rid` with `400 Bad Request`.
+- `rid` — Run ID: a UUID ([RFC 9562](https://www.rfc-editor.org/rfc/rfc9562))
+  in its textual form, 32 hexadecimal digits in groups of 8-4-4-4-12
+  separated by hyphens, in either case. Clients SHOULD use random (version 4)
+  or time-ordered (version 7) UUIDs. When present on a `start` signal and on a
+  completion signal (success, fail or exit code), the server MUST treat them
+  as the same run. This allows overlapping runs of the same check. A server
+  MUST reject an invalid `rid` with `400 Bad Request`.
 - `create` — When `create=1` is present and the check URL is a slug under a
   valid key, a server MAY create the check on first use. Servers that do not
   support creation MUST ignore the parameter.
@@ -186,7 +190,7 @@ A server MAY publish a discovery document at
 
 ```json
 {
-  "versions": ["0.1"],
+  "versions": ["0.2"],
   "max_body_bytes": 100000,
   "create": true,
   "documentation": "https://example.com/docs/heartbeats"
@@ -217,13 +221,25 @@ The reference implementation ships an automated conformance runner
 
 ## 12. Versioning
 
-Minor versions (0.x) add optional features and stay backward compatible on the
-wire: a 0.1 client works with a 0.2 server. Breaking changes require a new
+Until 1.0 the protocol is a draft and a new 0.x version may change the wire
+format; every change is listed in [CHANGELOG.md](CHANGELOG.md). From 1.0,
+minor versions only add optional features, and breaking changes require a new
 major version and a new discovery entry in `versions`.
+
+Changes in 0.2: `rid` must be a UUID, and servers may read exit codes with
+leading zeros. Both follow the behaviour of the most widely deployed
+implementation (Appendix A).
 
 ## Appendix A. Relation to existing services (informative)
 
 OHP follows the design that existing cron monitoring services converged on:
-a unique ping URL per job, with `/start` and `/fail` endpoints. The core of
-OHP (sections 4 and 5) matches the Healthchecks.io ping API. Services that
+a unique ping URL per job, with `/start` and `/fail` endpoints. Services that
 use different paths can become conforming by adding the OHP paths as aliases.
+
+**Healthchecks.io**, tested on 2026-11-09 with `ohp conform -pace 15s`
+against a hosted check, meets every MUST requirement of this version. It
+differs on SHOULD requirements: an unknown check UUID is answered with
+`200 OK (not found)` (and a malformed one with `400`) rather than `404`, exit codes with leading zeros are
+read as decimal, and responses carry no `OHP-Version` or
+`OHP-Log-Truncated` header. Its ping API also rate-limits each check;
+clients that retry on `429` (section 7.1) cope with it.

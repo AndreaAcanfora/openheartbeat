@@ -21,7 +21,7 @@ import (
 )
 
 // Version is the protocol version implemented by this package.
-const Version = "0.1"
+const Version = "0.2"
 
 // Signal selects what a ping reports. Its value is the path suffix appended
 // to the check URL.
@@ -95,9 +95,9 @@ func parseCode(s string) (int, bool) {
 	return n, n <= 255
 }
 
-var runIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+var runIDPattern = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
 
-// ValidRunID reports whether id is a valid run ID.
+// ValidRunID reports whether id is a valid run ID: a UUID in its textual form.
 func ValidRunID(id string) bool {
 	return runIDPattern.MatchString(id)
 }

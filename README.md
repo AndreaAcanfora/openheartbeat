@@ -13,9 +13,12 @@ similar but incompatible APIs, so every tool and every job is tied to one
 vendor. **OHP standardizes the wire protocol**, so that a job can switch
 monitoring server by changing one URL, and tools can integrate once.
 
-- **Specification:** [SPEC.md](SPEC.md) (version 0.1, draft)
-- **Compatible by design:** it formalizes the design that existing services
-  already converged on, so adopting it is mostly a matter of aliases.
+- **Specification:** [SPEC.md](SPEC.md) (version 0.2, draft)
+- **Compatible with what exists:** it formalizes the design that existing
+  services converged on. [Healthchecks.io](https://healthchecks.io) meets every
+  MUST requirement (tested against the hosted service), and
+  [uptimer](https://github.com/AndreaAcanfora/uptimer) implements it for
+  self-hosted monitoring.
 - **`curl` is a complete client.**
 
 ## The protocol in 30 seconds
@@ -88,7 +91,8 @@ ohp conform https://hb.example.com/ping/<key>/conformance-test
 ```
 
 Sends real signals to an existing check and reports which requirements of the
-spec pass. Use a dedicated check: the suite leaves it in the `up` state, but
+spec pass. For services that rate-limit pings, space the requests out with
+`-pace 15s`. Use a dedicated check: the suite leaves it in the `up` state, but
 its history will show the test signals.
 
 ```
@@ -97,7 +101,7 @@ PASS  MUST   §4.1 success with HEAD
 PASS  MUST   §6.1 success with POST and a body
 PASS  MUST   §5   start then exit code 0 with the same rid
 ...
-conforming to OHP 0.1
+conforming to OHP 0.2
 ```
 
 ## Go library
@@ -132,7 +136,6 @@ and never includes the check URL (a secret) in its errors.
 
 - Cron expressions and time zones in the reference server.
 - Adapters in `ohp run` for services that do not speak OHP yet.
-- OHP support in [uptimer](https://github.com/AndreaAcanfora/uptimer).
 - An optional management profile (creating checks and schedules).
 
 Feedback on the spec is the most useful contribution right now: open an issue,
