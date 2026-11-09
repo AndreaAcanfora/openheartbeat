@@ -67,6 +67,26 @@ OHP_URL=https://hb.example.com/ping/<key>/nightly-backup
 0 3 * * * ohp run -- /usr/local/bin/backup.sh
 ```
 
+### Works with other services
+
+`ohp run` and `ohp ping` speak OHP to OHP servers (uptimer, Healthchecks.io,
+the reference server) and translate automatically when the check URL belongs
+to a service with its own API. Only what each service documents is sent:
+
+| Check URL | Service | Start | Exit code | Run ID | Output |
+|---|---|---|---|---|---|
+| any OHP server, e.g. `https://hc-ping.com/<uuid>` | OHP | ✓ | ✓ | ✓ | ✓ |
+| `https://cronitor.link/p/<key>/<monitor>` | Cronitor | ✓ | ✓ | ✓ (`series`) | last 2,000 characters |
+| `https://o<org>.ingest.sentry.io/api/<project>/cron/<monitor>/<key>/` | Sentry Crons | ✓ | ok / error | ✓ (`check_in_id`) | – |
+| `https://nosnch.in/<token>` | Dead Man's Snitch | – | ✓ (`s=`) | – | – |
+
+So the same crontab line works whichever service you pick:
+
+```cron
+OHP_URL=https://cronitor.link/p/<key>/nightly-backup
+0 3 * * * ohp run -- /usr/local/bin/backup.sh
+```
+
 ### Send one signal
 
 ```sh
@@ -78,8 +98,12 @@ ohp ping 0
 ### Run a reference server
 
 ```sh
-ohp serve -addr 127.0.0.1:8080 -check backup:24h:1h
+ohp serve -addr 127.0.0.1:8080 -check backup:24h:1h -check "report:0 7 * * mon-fri:15m:Europe/Rome"
 ```
+
+A check is `slug:period:grace` or, for jobs on a cron schedule,
+`slug:cron expression:grace[:time zone]`: the next success is then due at the
+schedule's next run.
 
 An in-memory server for development and tests. Unknown checks are created on
 first use with `?create=1`; states are listed at `/api/checks`.
@@ -134,8 +158,7 @@ and never includes the check URL (a secret) in its errors.
 
 ## Roadmap
 
-- Cron expressions and time zones in the reference server.
-- Adapters in `ohp run` for services that do not speak OHP yet.
+- Better Stack heartbeats, once their API can be checked against their documentation.
 - An optional management profile (creating checks and schedules).
 
 Feedback on the spec is the most useful contribution right now: open an issue,

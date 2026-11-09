@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -33,6 +34,11 @@ type Result struct {
 	Truncated bool
 	// Attempts is the number of requests made, including retries.
 	Attempts int
+	// Service names the non-OHP service the signal was translated for
+	// ("cronitor", "sentry", "deadmanssnitch"), or is empty.
+	Service string
+	// Skipped is true when that service has no equivalent of the signal.
+	Skipped bool
 }
 
 // StatusError is returned when the server rejects a signal.
@@ -83,12 +89,24 @@ func (c *Client) Send(ctx context.Context, checkURL string, p Ping) (*Result, er
 	if err != nil {
 		return nil, err
 	}
+	build := func(ctx context.Context) (*http.Request, error) { return c.ohpRequest(ctx, target, p) }
+	service := ""
+	if a := adapterFor(checkURL); a != nil {
+		u, _ := url.Parse(checkURL)
+		service = a.name
+		if req, err := a.request(ctx, u, p); err != nil {
+			return nil, err
+		} else if req == nil {
+			return &Result{Service: service, Skipped: true}, nil
+		}
+		build = func(ctx context.Context) (*http.Request, error) { return a.request(ctx, u, p) }
+	}
 	delay := c.BaseDelay
 	var lastErr error
 	for attempt := 1; ; attempt++ {
-		res, retryAfter, err := c.attempt(ctx, target, p)
+		res, retryAfter, err := c.attempt(ctx, build)
 		if err == nil {
-			res.Attempts = attempt
+			res.Attempts, res.Service = attempt, service
 			return res, nil
 		}
 		lastErr = err
@@ -106,17 +124,12 @@ func (c *Client) Send(ctx context.Context, checkURL string, p Ping) (*Result, er
 	}
 }
 
-func (c *Client) attempt(ctx context.Context, target string, p Ping) (*Result, time.Duration, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.AttemptTimeout)
-	defer cancel()
+func (c *Client) ohpRequest(ctx context.Context, target string, p Ping) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(p.Body))
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	req.Header.Set("OHP-Version", Version)
-	if c.UserAgent != "" {
-		req.Header.Set("User-Agent", c.UserAgent)
-	}
 	if len(p.Body) > 0 {
 		req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 	}
@@ -127,7 +140,19 @@ func (c *Client) attempt(ctx context.Context, target string, p Ping) (*Result, t
 		req.Header.Set("OHP-Host", p.Host)
 	}
 	req.Header.Set("OHP-Timestamp", time.Now().UTC().Format(time.RFC3339))
+	return req, nil
+}
 
+func (c *Client) attempt(ctx context.Context, build func(context.Context) (*http.Request, error)) (*Result, time.Duration, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.AttemptTimeout)
+	defer cancel()
+	req, err := build(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		// Strip the URL from the error: it carries the check secret.
