@@ -6,7 +6,7 @@
 - `ohp conform -pace` spaces requests out for rate-limited services.
 - The conformance suite checks that non-UUID run IDs are rejected; leading zeros are now a SHOULD.
 
-## Unreleased
+## v0.1.0 — 2026-11-08
 
 - OHP specification, version 0.1 (draft).
 - Go client library with retries and secret-safe errors.
