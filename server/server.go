@@ -85,7 +85,7 @@ type Config struct {
 	Now func() time.Time
 }
 
-// Server is an http.Handler implementing OHP 0.1.
+// Server is an http.Handler implementing OHP 0.2.
 type Server struct {
 	cfg    Config
 	mu     sync.Mutex

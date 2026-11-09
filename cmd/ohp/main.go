@@ -161,13 +161,24 @@ func cmdServe(args []string, stderr io.Writer) int {
 }
 
 func cmdConform(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage: ohp conform <check-url>")
+	fs := flag.NewFlagSet("conform", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	pace := fs.Duration("pace", 0, "wait between requests, for servers that rate-limit pings (e.g. 15s)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: ohp conform [-pace 15s] <check-url>")
 		return 2
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	results, err := conformance.Run(ctx, nil, args[0])
+	// The timeout covers each request plus the pause before it.
+	client := &http.Client{Timeout: 10*time.Second + *pace}
+	if *pace > 0 {
+		client.Transport = &pacedTransport{next: http.DefaultTransport, every: *pace}
+	}
+	results, err := conformance.Run(ctx, client, fs.Arg(0))
 	for _, r := range results {
 		mark := "PASS"
 		if !r.Passed {
@@ -219,4 +230,23 @@ func (l *checkList) Set(v string) error {
 
 func trimPrefix(err error) string {
 	return strings.TrimPrefix(err.Error(), "ohp: ")
+}
+
+// pacedTransport spaces requests out, for servers that rate-limit pings.
+type pacedTransport struct {
+	next  http.RoundTripper
+	every time.Duration
+	last  time.Time
+}
+
+func (p *pacedTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if wait := p.every - time.Since(p.last); !p.last.IsZero() && wait > 0 {
+		select {
+		case <-time.After(wait):
+		case <-r.Context().Done():
+			return nil, r.Context().Err()
+		}
+	}
+	p.last = time.Now()
+	return p.next.RoundTrip(r)
 }

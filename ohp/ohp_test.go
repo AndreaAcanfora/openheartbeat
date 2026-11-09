@@ -53,7 +53,7 @@ func TestSignalURL(t *testing.T) {
 		want  string
 	}{
 		{"https://hb.example/p/abc", Success, "", "https://hb.example/p/abc"},
-		{"https://hb.example/p/abc/", Start, "r1", "https://hb.example/p/abc/start?rid=r1"},
+		{"https://hb.example/p/abc/", Start, "0190d6a8-0000-7000-8000-00000000000a", "https://hb.example/p/abc/start?rid=0190d6a8-0000-7000-8000-00000000000a"},
 		{"https://hb.example/p/abc?create=1", ExitCode(3), "", "https://hb.example/p/abc/3?create=1"},
 		{"http://localhost:8080/ping/k/backup", Log, "", "http://localhost:8080/ping/k/backup/log"},
 	}
@@ -66,6 +66,11 @@ func TestSignalURL(t *testing.T) {
 	for _, bad := range []string{"ftp://x/y", "not a url", "https:///nohost"} {
 		if _, err := SignalURL(bad, Success, ""); err == nil {
 			t.Errorf("SignalURL(%q) succeeded", bad)
+		}
+	}
+	for id, ok := range map[string]bool{"0190D6A8-0000-7000-8000-00000000000A": true, "run-42": false, "0190d6a8000070008000000000000000": false} {
+		if ValidRunID(id) != ok {
+			t.Errorf("ValidRunID(%q) = %v", id, !ok)
 		}
 	}
 	if _, err := SignalURL("https://x/y", Success, "bad rid"); err == nil {
@@ -104,7 +109,7 @@ func TestSendRequest(t *testing.T) {
 	defer srv.Close()
 
 	res, err := testClient().Send(context.Background(), srv.URL+"/ping/k/job", Ping{
-		Signal: ExitCode(1), RunID: "run-1", Body: []byte("boom"), Duration: 1500 * time.Millisecond, Host: "h1",
+		Signal: ExitCode(1), RunID: "0190d6a8-0000-7000-8000-00000000000a", Body: []byte("boom"), Duration: 1500 * time.Millisecond, Host: "h1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +117,7 @@ func TestSendRequest(t *testing.T) {
 	if !res.Truncated || res.Attempts != 1 {
 		t.Errorf("result = %+v", res)
 	}
-	if got.Method != http.MethodPost || got.URL.Path != "/ping/k/job/1" || got.URL.Query().Get("rid") != "run-1" {
+	if got.Method != http.MethodPost || got.URL.Path != "/ping/k/job/1" || got.URL.Query().Get("rid") != "0190d6a8-0000-7000-8000-00000000000a" {
 		t.Errorf("request = %s %s", got.Method, got.URL)
 	}
 	if body != "boom" || got.Header.Get("OHP-Duration") != "1.500" || got.Header.Get("OHP-Host") != "h1" || got.Header.Get("OHP-Version") != Version {

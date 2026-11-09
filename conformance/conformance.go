@@ -137,7 +137,7 @@ var cases = []testCase{
 	{"exit code 256 is rejected", Must, "4", func(ctx context.Context, t *tester) error {
 		return t.expectStatus(ctx, t.url("256", ""), 400, 404)
 	}},
-	{"exit code with a leading zero is rejected", Must, "4", func(ctx context.Context, t *tester) error {
+	{"exit code with a leading zero is rejected", Should, "4", func(ctx context.Context, t *tester) error {
 		return t.expectStatus(ctx, t.url("01", ""), 400, 404)
 	}},
 	{"unknown suffix is rejected", Must, "4", func(ctx context.Context, t *tester) error {
@@ -145,6 +145,9 @@ var cases = []testCase{
 	}},
 	{"invalid rid is rejected", Must, "5", func(ctx context.Context, t *tester) error {
 		return t.expectStatus(ctx, t.url("log", "rid="+url.QueryEscape("not a valid rid!")), 400)
+	}},
+	{"rid that is not a UUID is rejected", Must, "5", func(ctx context.Context, t *tester) error {
+		return t.expectStatus(ctx, t.url("log", "rid=run-42"), 400)
 	}},
 	{"unknown check returns 404", Should, "7", func(ctx context.Context, t *tester) error {
 		return t.expectStatus(ctx, t.sibling(), 404)

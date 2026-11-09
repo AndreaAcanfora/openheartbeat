@@ -36,13 +36,14 @@ func TestResponses(t *testing.T) {
 	}{
 		{"GET", "/ping/k3y/backup", 200},
 		{"HEAD", "/ping/k3y/backup", 200},
-		{"POST", "/ping/k3y/backup/start?rid=abc", 200},
+		{"POST", "/ping/k3y/backup/start?rid=0190d6a8-0000-7000-8000-00000000000a", 200},
 		{"POST", "/ping/k3y/backup/255", 200},
 		{"POST", "/ping/k3y/backup/log?unknown=1", 200},
 		{"POST", "/ping/k3y/backup/256", 400},
 		{"POST", "/ping/k3y/backup/01", 400},
 		{"POST", "/ping/k3y/backup/nope", 400},
 		{"POST", "/ping/k3y/backup?rid=a%20b", 400},
+		{"POST", "/ping/k3y/backup?rid=run-42", 400},
 		{"PUT", "/ping/k3y/backup", 405},
 		{"POST", "/ping/wrong/backup", 404},
 		{"POST", "/ping/k3y/missing", 404},
@@ -55,7 +56,7 @@ func TestResponses(t *testing.T) {
 		if w.Code != c.want {
 			t.Errorf("%s %s = %d, want %d", c.method, c.path, w.Code, c.want)
 		}
-		if w.Header().Get("OHP-Version") != "0.1" {
+		if w.Header().Get("OHP-Version") != "0.2" {
 			t.Errorf("%s %s: missing OHP-Version", c.method, c.path)
 		}
 	}
@@ -130,20 +131,20 @@ func TestRunsAndDurations(t *testing.T) {
 	send(s, "POST", "/ping/k3y/backup", "")
 
 	// Two overlapping runs, told apart by rid.
-	send(s, "POST", "/ping/k3y/backup/start?rid=a", "")
+	send(s, "POST", "/ping/k3y/backup/start?rid=0190d6a8-0000-7000-8000-00000000000a", "")
 	clk.advance(time.Minute)
-	send(s, "POST", "/ping/k3y/backup/start?rid=b", "")
+	send(s, "POST", "/ping/k3y/backup/start?rid=0190d6a8-0000-7000-8000-00000000000b", "")
 	st, _ := s.Status("backup")
 	if !st.Running {
 		t.Fatal("not running after start")
 	}
 	clk.advance(30 * time.Second)
-	send(s, "POST", "/ping/k3y/backup/0?rid=a", "")
+	send(s, "POST", "/ping/k3y/backup/0?rid=0190d6a8-0000-7000-8000-00000000000a", "")
 	if st, _ = s.Status("backup"); st.LastDuration != 90*time.Second || !st.Running {
 		t.Errorf("run a: duration %s running %v", st.LastDuration, st.Running)
 	}
 	clk.advance(30 * time.Second)
-	send(s, "POST", "/ping/k3y/backup/0?rid=b", "")
+	send(s, "POST", "/ping/k3y/backup/0?rid=0190d6a8-0000-7000-8000-00000000000b", "")
 	if st, _ = s.Status("backup"); st.LastDuration != time.Minute || st.Running {
 		t.Errorf("run b: duration %s running %v", st.LastDuration, st.Running)
 	}
@@ -168,7 +169,7 @@ func TestDiscoveryAndList(t *testing.T) {
 	s, _ := newTest(t)
 	w := send(s, "GET", "/.well-known/ohp", "")
 	var doc map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil || doc["versions"].([]any)[0] != "0.1" {
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil || doc["versions"].([]any)[0] != "0.2" {
 		t.Fatalf("discovery: %s", w.Body)
 	}
 	if w := send(s, "GET", "/api/checks", ""); w.Code != http.StatusUnauthorized {
