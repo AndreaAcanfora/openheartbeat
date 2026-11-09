@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 — 2026-11-09
 
 - Spec 0.2 (draft): `rid` must be a UUID, as Healthchecks.io requires; servers may read exit codes with leading zeros. Appendix A reports a conformance run against Healthchecks.io: every MUST passes.
 - `ohp conform -pace` spaces requests out for rate-limited services.
