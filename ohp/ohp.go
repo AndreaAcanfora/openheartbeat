@@ -1,4 +1,4 @@
-// Package ohp is a client for the Open Heartbeat Protocol (OHP), version 0.1.
+// Package ohp is a client for the Open Heartbeat Protocol (OHP), version 0.2.
 //
 // A job reports to a heartbeat server by sending signals to its check URL:
 //

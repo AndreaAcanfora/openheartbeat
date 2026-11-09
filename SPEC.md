@@ -149,7 +149,7 @@ matching `start` signal SHOULD prefer its own measurement.
 
 A successful response body is the text `OK` (or `Created`), followed by an
 optional newline. Servers SHOULD include the response header
-`OHP-Version: 0.1`.
+`OHP-Version: 0.2`.
 
 ### 7.1 Client behaviour
 
