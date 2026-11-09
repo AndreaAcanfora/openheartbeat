@@ -29,7 +29,7 @@ OHP deliberately formalizes the de facto design already used by existing
 services (most closely the Healthchecks.io ping API), so that existing servers
 can become conforming with little or no change.
 
-Out of scope for 0.1: how checks are created and configured (schedules, grace
+Out of scope for this version: how checks are created and configured (schedules, grace
 periods, alert channels), alerting, and user interfaces. These are server
 concerns. Section 9 defines an optional discovery document.
 
@@ -127,7 +127,7 @@ ignore those they do not support:
 
 | Header          | Value                                   | Example                     |
 |-----------------|-----------------------------------------|-----------------------------|
-| `OHP-Version`   | Protocol version implemented by client  | `0.1`                       |
+| `OHP-Version`   | Protocol version implemented by client  | `0.2`                       |
 | `OHP-Duration`  | Run duration in seconds, decimal        | `12.304`                    |
 | `OHP-Host`      | Host name that ran the job              | `backup-01`                 |
 | `OHP-Timestamp` | Client time of the event, RFC 3339      | `2026-11-07T22:00:03Z`      |
