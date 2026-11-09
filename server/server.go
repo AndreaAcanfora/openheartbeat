@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AndreaAcanfora/openheartbeat/cron"
 	"github.com/AndreaAcanfora/openheartbeat/ohp"
 )
 
@@ -46,8 +47,11 @@ type Status struct {
 	Slug         string        `json:"slug"`
 	State        State         `json:"state"`
 	Running      bool          `json:"running"`
-	Period       time.Duration `json:"period_ns"`
+	Period       time.Duration `json:"period_ns,omitempty"`
+	Schedule     string        `json:"schedule,omitempty"`
+	TimeZone     string        `json:"time_zone,omitempty"`
 	Grace        time.Duration `json:"grace_ns"`
+	NextDue      *time.Time    `json:"next_due,omitempty"`
 	LastSuccess  *time.Time    `json:"last_success,omitempty"`
 	LastFailure  *time.Time    `json:"last_failure,omitempty"`
 	LastDuration time.Duration `json:"last_duration_ns,omitempty"`
@@ -57,9 +61,12 @@ type Status struct {
 type check struct {
 	slug          string
 	period, grace time.Duration
-	lastSuccess   time.Time
-	lastFailure   time.Time
-	lastDuration  time.Duration
+	// schedule, when set, replaces period: a success is due at the
+	// schedule's next run after the previous success.
+	schedule     *cron.Schedule
+	lastSuccess  time.Time
+	lastFailure  time.Time
+	lastDuration time.Duration
 	// failing is true when the last completion was a failure.
 	failing bool
 	// open runs: run ID ("" for runs without one) → start time
@@ -129,6 +136,30 @@ func (s *Server) AddCheck(slug string, period, grace time.Duration) {
 		return
 	}
 	s.checks[slug] = &check{slug: slug, period: period, grace: grace, runs: map[string]time.Time{}}
+}
+
+// due returns when the next success is expected, or the zero time if never.
+func (c *check) due() time.Time {
+	if c.lastSuccess.IsZero() {
+		return time.Time{}
+	}
+	if c.schedule != nil {
+		return c.schedule.Next(c.lastSuccess)
+	}
+	return c.lastSuccess.Add(c.period)
+}
+
+// AddCronCheck registers a check whose job runs on a cron schedule, or
+// updates an existing one.
+func (s *Server) AddCronCheck(slug string, schedule *cron.Schedule, grace time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.checks[slug]
+	if !ok {
+		c = &check{slug: slug, runs: map[string]time.Time{}}
+		s.checks[slug] = c
+	}
+	c.period, c.schedule, c.grace = 0, schedule, grace
 }
 
 // CheckURL returns the check URL of slug on a server reachable at base.
@@ -279,9 +310,9 @@ func (c *check) state(now time.Time) State {
 	case c.failing:
 		return StateDown
 	}
-	due := c.lastSuccess.Add(c.period)
+	due := c.due()
 	switch {
-	case !now.After(due):
+	case due.IsZero() || !now.After(due):
 		return StateUp
 	case !now.After(due.Add(c.grace)):
 		return StateLate
@@ -303,6 +334,12 @@ func (c *check) status(now time.Time) Status {
 	if !c.lastSuccess.IsZero() {
 		t := c.lastSuccess
 		st.LastSuccess = &t
+	}
+	if c.schedule != nil {
+		st.Schedule, st.TimeZone = c.schedule.String(), c.schedule.Location().String()
+	}
+	if due := c.due(); !due.IsZero() {
+		st.NextDue = &due
 	}
 	if !c.lastFailure.IsZero() {
 		t := c.lastFailure

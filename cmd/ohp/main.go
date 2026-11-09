@@ -14,8 +14,10 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+	_ "time/tzdata" // cron time zones work on systems without zone files
 
 	"github.com/AndreaAcanfora/openheartbeat/conformance"
+	"github.com/AndreaAcanfora/openheartbeat/cron"
 	"github.com/AndreaAcanfora/openheartbeat/ohp"
 	"github.com/AndreaAcanfora/openheartbeat/server"
 )
@@ -128,7 +130,7 @@ func cmdServe(args []string, stderr io.Writer) int {
 	period := fs.Duration("period", 24*time.Hour, "expected period of checks created with create=1")
 	grace := fs.Duration("grace", time.Hour, "grace time of checks created with create=1")
 	var checks checkList
-	fs.Var(&checks, "check", "predefined check as slug:period:grace, e.g. backup:24h:1h (repeatable)")
+	fs.Var(&checks, "check", `predefined check as slug:period:grace ("backup:24h:1h") or slug:cron:grace[:time zone] ("backup:0 3 * * *:1h:Europe/Rome"); repeatable`)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -137,7 +139,11 @@ func cmdServe(args []string, stderr io.Writer) int {
 	}
 	srv := server.New(server.Config{Key: *key, AllowCreate: true, DefaultPeriod: *period, DefaultGrace: *grace})
 	for _, c := range checks {
-		srv.AddCheck(c.slug, c.period, c.grace)
+		if c.schedule != nil {
+			srv.AddCronCheck(c.slug, c.schedule, c.grace)
+		} else {
+			srv.AddCheck(c.slug, c.period, c.grace)
+		}
 	}
 	base := "http://" + *addr
 	fmt.Fprintf(stderr, "ohp: reference server on %s\n", base)
@@ -205,26 +211,40 @@ func cmdConform(args []string, stdout, stderr io.Writer) int {
 type checkSpec struct {
 	slug          string
 	period, grace time.Duration
+	schedule      *cron.Schedule
 }
 
 type checkList []checkSpec
 
 func (l *checkList) String() string { return "" }
 
+// Set parses slug:period:grace or slug:cron expression:grace[:time zone],
+// e.g. "backup:24h:1h" or "backup:0 3 * * *:1h:Europe/Rome".
 func (l *checkList) Set(v string) error {
 	parts := strings.Split(v, ":")
-	if len(parts) != 3 {
-		return fmt.Errorf("want slug:period:grace, got %q", v)
+	if len(parts) != 3 && len(parts) != 4 {
+		return fmt.Errorf("want slug:period:grace or slug:cron:grace[:time zone], got %q", v)
 	}
-	p, err := time.ParseDuration(parts[1])
-	if err != nil {
-		return err
-	}
+	spec := checkSpec{slug: parts[0]}
 	g, err := time.ParseDuration(parts[2])
 	if err != nil {
 		return err
 	}
-	*l = append(*l, checkSpec{parts[0], p, g})
+	spec.grace = g
+	if p, err := time.ParseDuration(parts[1]); err == nil && len(parts) == 3 {
+		spec.period = p
+	} else {
+		loc := time.UTC
+		if len(parts) == 4 {
+			if loc, err = time.LoadLocation(parts[3]); err != nil {
+				return fmt.Errorf("time zone: %w", err)
+			}
+		}
+		if spec.schedule, err = cron.Parse(parts[1], loc); err != nil {
+			return err
+		}
+	}
+	*l = append(*l, spec)
 	return nil
 }
 

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AndreaAcanfora/openheartbeat/cron"
 )
 
 type clock struct{ t time.Time }
@@ -192,5 +194,32 @@ func TestEventsAreCapped(t *testing.T) {
 	}
 	if st, _ := s.Status("backup"); len(st.Events) != 20 {
 		t.Errorf("kept %d events", len(st.Events))
+	}
+}
+
+func TestCronSchedule(t *testing.T) {
+	s, clk := newTest(t)
+	sched, err := cron.Parse("0 3 * * *", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.AddCronCheck("nightly", sched, 30*time.Minute)
+	// The clock starts at 22:00 UTC: the job runs at 03:00.
+	send(s, "POST", "/ping/k3y/nightly", "")
+	st, _ := s.Status("nightly")
+	if st.State != StateUp || st.Schedule != "0 3 * * *" || st.TimeZone != "UTC" || st.NextDue == nil || st.NextDue.Format("15:04") != "03:00" {
+		t.Fatalf("after success: %+v", st)
+	}
+	clk.advance(5*time.Hour + 20*time.Minute) // 03:20, within grace
+	if st, _ = s.Status("nightly"); st.State != StateLate {
+		t.Errorf("03:20: %s", st.State)
+	}
+	clk.advance(11 * time.Minute) // 03:31
+	if st, _ = s.Status("nightly"); st.State != StateDown {
+		t.Errorf("03:31: %s", st.State)
+	}
+	send(s, "POST", "/ping/k3y/nightly", "")
+	if st, _ = s.Status("nightly"); st.State != StateUp || st.NextDue.Sub(*st.LastSuccess) > 24*time.Hour {
+		t.Errorf("after the run: %+v", st)
 	}
 }

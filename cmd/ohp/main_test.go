@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/AndreaAcanfora/openheartbeat/ohp"
 )
@@ -140,5 +141,28 @@ func TestPingValidation(t *testing.T) {
 	t.Setenv("OHP_URL", "")
 	if code := run([]string{"ping"}, nil, &bytes.Buffer{}, &stderr); code != 2 {
 		t.Errorf("missing URL: code %d", code)
+	}
+}
+
+func TestCheckFlag(t *testing.T) {
+	var l checkList
+	for _, v := range []string{"a:24h:1h", "b:0 3 * * *:1h", "c:@daily:30m:Europe/Rome"} {
+		if err := l.Set(v); err != nil {
+			t.Fatalf("%q: %v", v, err)
+		}
+	}
+	if l[0].period != 24*time.Hour || l[0].schedule != nil {
+		t.Errorf("period check %+v", l[0])
+	}
+	if l[1].schedule == nil || l[1].schedule.String() != "0 3 * * *" || l[1].grace != time.Hour {
+		t.Errorf("cron check %+v", l[1])
+	}
+	if l[2].schedule == nil || l[2].schedule.Location().String() != "Europe/Rome" {
+		t.Errorf("time zone %+v", l[2])
+	}
+	for _, bad := range []string{"x", "a:soon:1h", "a:0 3 * * *:1h:Mars/Base", "a:24h:forever"} {
+		if err := l.Set(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
 	}
 }
